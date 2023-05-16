@@ -1,4 +1,4 @@
-import { useReducer, useState } from "react";
+import { ChangeEvent, useEffect, useReducer, useRef, useState } from "react";
 
 const Eye = () => (
   <svg
@@ -37,8 +37,6 @@ const EyeSlash = () => (
   </svg>
 );
 
-const clsx = (...classes: unknown[]) => classes.filter(Boolean).join(" ");
-
 function secret(email: string) {
   const [head, tail] = email.split("@");
   if (!tail) return email;
@@ -46,30 +44,62 @@ function secret(email: string) {
   return `${head.slice(0, half).padEnd(head.length, "*")}@${tail}`;
 }
 
-function reducer(state = "", action: InputEvent) {
-  if (action.inputType === "insertText") {
-    return state + action.data;
+type State = {
+  value: string;
+  selectionStart: number;
+  selectionEnd: number;
+};
+function reducer(state: State, action: ChangeEvent<HTMLInputElement>) {
+  const event = action.nativeEvent as InputEvent;
+  const index = action.target.selectionStart;
+
+  if (event.inputType === "insertText" && event.data && index !== null) {
+    return {
+      ...state,
+      value:
+        state.value.slice(0, index) + event.data + state.value.slice(index),
+      selectionStart: action.target.selectionStart ?? 0,
+      selectionEnd: action.target.selectionEnd ?? 0,
+    };
   }
-  if (action.inputType === "deleteContentBackward") {
-    return state.slice(0, -1);
+  if (event.inputType === "deleteContentBackward" && index !== null) {
+    return {
+      ...state,
+      value: state.value.slice(0, index) + state.value.slice(index + 1),
+      selectionStart: action.target.selectionStart ?? 0,
+      selectionEnd: action.target.selectionEnd ?? 0,
+    };
   }
-  if (action.inputType === "insertFromPaste") {
-    return action.data ?? state;
+  if (event.inputType === "insertFromPaste") {
+    return {
+      ...state,
+      value: event.data ?? state.value,
+    };
   }
   return state;
 }
 
 function App() {
   const [show, setShow] = useState(false);
-  const [email, dispatch] = useReducer(reducer, "");
+  const [state, dispatch] = useReducer(reducer, {
+    value: "",
+    selectionStart: 0,
+    selectionEnd: 0,
+  });
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.setSelectionRange(state.selectionStart, state.selectionEnd);
+  });
 
   return (
     <label className="w-72 relative text-black flex items-center">
       <input
-        type="email"
+        type="text"
         className="rounded-lg w-full"
-        value={show ? email : secret(email)}
-        onInput={({ nativeEvent: e }) => e instanceof InputEvent && dispatch(e)}
+        ref={ref}
+        value={show ? state.value : secret(state.value)}
+        onChange={dispatch}
       />
       <button
         className="absolute right-0 w-5 mx-2"
